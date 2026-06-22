@@ -1,0 +1,29 @@
+{
+	"name": "Super Ape Mayhem",
+	"short_name": "Ape Mayhem",
+	"description": "A chaotic Godot survival game with nukes, boats, flying planes, ragdoll launches, and way too many apes.",
+	"start_url": "./",
+	"scope": "./",
+	"display": "fullscreen",
+	"orientation": "landscape",
+	"background_color": "#100d0b",
+	"theme_color": "#a33b24",
+	"icons": [
+		{
+			"src": "icon-192.png",
+			"sizes": "192x192",
+			"type": "image/png"
+		},
+		{
+			"src": "icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png"
+		},
+		{
+			"src": "maskable-icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "maskable"
+		}
+	]
+}

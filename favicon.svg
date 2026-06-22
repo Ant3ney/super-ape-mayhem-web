@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Simple ape icon">
+	<circle cx="16" cy="32" r="10" fill="#2b211d"/>
+	<circle cx="48" cy="32" r="10" fill="#2b211d"/>
+	<ellipse cx="32" cy="33" rx="24" ry="26" fill="#17110f"/>
+	<ellipse cx="32" cy="41" rx="16" ry="12" fill="#3b2a23"/>
+	<path d="M20 24c4-7 20-7 24 0" fill="none" stroke="#3a2a23" stroke-width="7" stroke-linecap="round"/>
+	<ellipse cx="24" cy="32" rx="4.8" ry="6" fill="#fff"/>
+	<ellipse cx="40" cy="32" rx="4.8" ry="6" fill="#fff"/>
+	<ellipse cx="25" cy="34" rx="1.7" ry="2.2" fill="#17110f"/>
+	<ellipse cx="39" cy="34" rx="1.7" ry="2.2" fill="#17110f"/>
+	<path d="M24 44c4.8 5 11.2 5 16 0" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Super Ape Mayhem social preview">
+	<defs>
+		<linearGradient id="sky" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+			<stop offset="0" stop-color="#f2b14a"/>
+			<stop offset="0.45" stop-color="#753326"/>
+			<stop offset="1" stop-color="#100d0b"/>
+		</linearGradient>
+		<radialGradient id="blast" cx="950" cy="190" r="360" gradientUnits="userSpaceOnUse">
+			<stop offset="0" stop-color="#fff4b8"/>
+			<stop offset="0.2" stop-color="#ff8e36"/>
+			<stop offset="0.52" stop-color="#782316" stop-opacity="0.72"/>
+			<stop offset="1" stop-color="#000" stop-opacity="0"/>
+		</radialGradient>
+		<linearGradient id="ground" x1="0" y1="360" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+			<stop offset="0" stop-color="#455d2d"/>
+			<stop offset="0.58" stop-color="#30241b"/>
+			<stop offset="1" stop-color="#15110f"/>
+		</linearGradient>
+		<filter id="deepShadow" x="-30%" y="-30%" width="160%" height="160%">
+			<feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#000" flood-opacity="0.5"/>
+		</filter>
+	</defs>
+	<rect width="1200" height="630" fill="url(#sky)"/>
+	<circle cx="950" cy="190" r="360" fill="url(#blast)"/>
+	<path d="M0 360c160-45 246-16 385-38 148-23 250-92 400-55 120 30 209 102 415 51v312H0z" fill="url(#ground)"/>
+	<path d="M0 473c128-22 221-10 337-24 135-17 250-54 387-36 160 22 276 89 476 34v183H0z" fill="#171411" opacity="0.84"/>
+	<g opacity="0.3" fill="none" stroke="#fff3bf" stroke-width="4">
+		<path d="M870 88l-70 208"/>
+		<path d="M1030 74l-92 248"/>
+		<path d="M728 146l-58 168"/>
+	</g>
+	<g transform="translate(88 92) scale(5.35)" filter="url(#deepShadow)">
+		<circle cx="16" cy="32" r="10" fill="#2b211d"/>
+		<circle cx="48" cy="32" r="10" fill="#2b211d"/>
+		<ellipse cx="32" cy="33" rx="24" ry="26" fill="#17110f"/>
+		<ellipse cx="32" cy="41" rx="16" ry="12" fill="#3b2a23"/>
+		<path d="M20 24c4-7 20-7 24 0" fill="none" stroke="#3a2a23" stroke-width="7" stroke-linecap="round"/>
+		<ellipse cx="24" cy="32" rx="4.8" ry="6" fill="#fff"/>
+		<ellipse cx="40" cy="32" rx="4.8" ry="6" fill="#fff"/>
+		<ellipse cx="25" cy="34" rx="1.7" ry="2.2" fill="#17110f"/>
+		<ellipse cx="39" cy="34" rx="1.7" ry="2.2" fill="#17110f"/>
+		<path d="M24 44c4.8 5 11.2 5 16 0" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round"/>
+	</g>
+	<g filter="url(#deepShadow)">
+		<text x="462" y="205" fill="#fff8db" font-family="Arial Black, Impact, DejaVu Sans, sans-serif" font-size="88" font-weight="900">SUPER APE</text>
+		<text x="462" y="300" fill="#ffffff" font-family="Arial Black, Impact, DejaVu Sans, sans-serif" font-size="96" font-weight="900">MAYHEM</text>
+		<text x="466" y="362" fill="#ffe59a" font-family="DejaVu Sans, Arial, sans-serif" font-size="28" font-weight="700">nukes, boats, planes, and launch-happy apes</text>
+	</g>
+	<g transform="translate(462 420)">
+		<rect x="0" y="0" width="300" height="56" rx="13" fill="#fff8db"/>
+		<text x="25" y="38" fill="#17110f" font-family="Arial Black, Impact, DejaVu Sans, sans-serif" font-size="30" font-weight="900">PLAY WEB BUILD</text>
+	</g>
+</svg>
