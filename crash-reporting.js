@@ -9,6 +9,7 @@
 	const HEARTBEAT_INTERVAL_MS = 5000;
 	const REPORT_EMAIL = 'anthonycavuoti@gmail.com';
 	const REPORTER_VERSION = 3;
+	const UNKNOWN_CAUSE_ID = '_blank';
 
 	let persistTimer = 0;
 	let canvasAttached = false;
@@ -83,6 +84,177 @@
 			return output;
 		}
 		return safeString(value);
+	}
+
+	function parseEventTimeMs(event) {
+		if (!event || !event.t) {
+			return null;
+		}
+		const parsed = Date.parse(event.t);
+		return Number.isFinite(parsed) ? parsed : null;
+	}
+
+	function findMostRecentEventBefore(events, typePrefix, beforeMs, maxAgeMs) {
+		if (!Array.isArray(events)) {
+			return null;
+		}
+		for (let i = events.length - 1; i >= 0; i -= 1) {
+			const event = events[i];
+			if (!event || !event.type || event.type.indexOf(typePrefix) !== 0) {
+				continue;
+			}
+			const eventMs = parseEventTimeMs(event);
+			if (eventMs == null) {
+				continue;
+			}
+			if (eventMs <= beforeMs && (beforeMs - eventMs) <= maxAgeMs) {
+				return event;
+			}
+		}
+		return null;
+	}
+
+	function collectRecentEventTypes(events, typePrefixes, beforeMs, maxAgeMs) {
+		const matches = [];
+		if (!Array.isArray(events)) {
+			return matches;
+		}
+		for (let i = events.length - 1; i >= 0; i -= 1) {
+			const event = events[i];
+			if (!event || !event.type) {
+				continue;
+			}
+			const matchesPrefix = typePrefixes.some(function (typePrefix) {
+				return event.type.indexOf(typePrefix) === 0;
+			});
+			if (!matchesPrefix) {
+				continue;
+			}
+			const eventMs = parseEventTimeMs(event);
+			if (eventMs == null) {
+				continue;
+			}
+			if (eventMs <= beforeMs && (beforeMs - eventMs) <= maxAgeMs) {
+				matches.push(event);
+			}
+		}
+		return matches;
+	}
+
+	function inferCause(session, reason) {
+		const events = Array.isArray(session.events) ? session.events : [];
+		const latestTime = events.length ? parseEventTimeMs(events[events.length - 1]) : Date.now();
+		const snapshotTime = latestTime || Date.now();
+		const windowMs = 30000;
+		const causeEvidence = [];
+		const consoleErrorEvents = events.filter(function (event) {
+			if (!event || event.type !== 'console.error' || !event.data || typeof event.data.message !== 'string') {
+				return false;
+			}
+			const message = event.data.message.toLowerCase();
+			return message.indexOf('!is_inside_tree') !== -1 || message.indexOf('get_global_transform') !== -1 || message.indexOf('godot') !== -1;
+		});
+
+		const foundCondition = consoleErrorEvents.find(function (event) {
+			return String(event.data.message).indexOf('!is_inside_tree()') !== -1;
+		});
+		const foundTransform = consoleErrorEvents.find(function (event) {
+			return String(event.data.message).indexOf('get_global_transform') !== -1;
+		});
+
+		if (foundCondition || foundTransform) {
+			const conditionMs = parseEventTimeMs(foundCondition) || snapshotTime;
+			const transformMs = parseEventTimeMs(foundTransform) || snapshotTime;
+			const bothWithin2s = Math.abs(conditionMs - transformMs) <= 2000;
+			if (foundCondition && foundTransform && bothWithin2s) {
+				const context = collectRecentEventTypes(events, ['game.shell_shock_requested', 'game.jumpscare_requested'], snapshotTime, 6000);
+				const contextIds = [];
+				if (context.length > 0) {
+					context.forEach(function (event) {
+						contextIds.push('seq:' + event.seq);
+					});
+				}
+				const confidence = Math.min(1.0, 0.84 + (contextIds.length > 0 ? 0.10 : 0.0) + (consoleErrorEvents.length > 1 ? 0.06 : 0));
+				causeEvidence.push('event:game.shell_shock_requested/jumpscare_requested', 'event:console.error', 'timing:condition+transform');
+				const nearbySnapshots = collectRecentEventTypes(events, ['game.snapshot'], snapshotTime, windowMs);
+				if (nearbySnapshots.length > 0) {
+					causeEvidence.push('event:game.snapshot');
+				}
+				return {
+					id: 'godot.node_out_of_tree_transform',
+					label: 'Godot Node3D access outside scene tree',
+					confidence: Number(confidence.toFixed(2)),
+					reasonText: reason || '',
+					evidence: {
+						condition_event_seq: foundCondition ? foundCondition.seq : null,
+						transform_event_seq: foundTransform ? foundTransform.seq : null,
+						context_event_seqs: contextIds,
+						matched_patterns: [
+							'!is_inside_tree()',
+							'get_global_transform',
+						],
+					},
+				};
+			}
+		}
+
+		const webglLoss = events.find(function (event) {
+			return event && event.type === 'browser.webgl_context_lost';
+		});
+		if (webglLoss) {
+			return {
+				id: 'webgl.context_lost',
+				label: 'WebGL context lost',
+				confidence: 0.68,
+				reasonText: reason || '',
+				evidence: {
+					event_seq: webglLoss.seq,
+					event_type: webglLoss.type,
+				},
+			};
+		}
+
+		const lifecycleHidden = events.find(function (event) {
+			if (!event || event.type !== 'browser.visibility_change' || !event.data) {
+				return false;
+			}
+			return event.data.hidden === true;
+		});
+		if (lifecycleHidden && reason && String(reason).toLowerCase().indexOf('active') !== -1) {
+			return {
+				id: 'browser.lifecycle_hidden',
+				label: 'Browser hidden during active gameplay',
+				confidence: 0.45,
+				reasonText: reason || '',
+				evidence: {
+					event_seq: lifecycleHidden.seq,
+					event_type: lifecycleHidden.type,
+					visibilityState: lifecycleHidden.data.visibilityState,
+				},
+			};
+		}
+
+		if (causeEvidence.length > 0) {
+			return {
+				id: UNKNOWN_CAUSE_ID,
+				label: 'Inconclusive; patterns partially matched',
+				confidence: 0.35,
+				reasonText: reason || '',
+				evidence: {
+					items: causeEvidence.slice(),
+				},
+			};
+		}
+
+		return {
+			id: UNKNOWN_CAUSE_ID,
+			label: 'Unknown',
+			confidence: 0.0,
+			reasonText: reason || '',
+			evidence: {
+				event_count: events.length,
+			},
+		};
 	}
 
 	function collectMetadata() {
@@ -204,6 +376,7 @@
 	function buildReport(session, reason) {
 		const lines = [];
 		const events = Array.isArray(session.events) ? session.events : [];
+		const cause = inferCause(session, reason);
 		lines.push('Super Ape Mayhem Crash Report');
 		lines.push('Generated At: ' + nowIso());
 		lines.push('Reason: ' + reason);
@@ -214,6 +387,16 @@
 		lines.push('Clean Exit: ' + String(!!session.cleanExit));
 		lines.push('Clean Exit Reason: ' + String(session.cleanExitReason || ''));
 		lines.push('Event Count: ' + String(events.length));
+		lines.push('');
+		lines.push('Suspected Cause: ' + String(cause.id || UNKNOWN_CAUSE_ID));
+		lines.push('Cause Label: ' + String(cause.label || 'Unknown'));
+		lines.push('Cause Confidence: ' + String(Number((cause.confidence || 0) * 100).toFixed(1)) + '%');
+		if (cause.reasonText) {
+			lines.push('Cause Reason Text: ' + String(cause.reasonText));
+		}
+		if (cause.evidence) {
+			lines.push('Cause Evidence: ' + JSON.stringify(cause.evidence));
+		}
 		lines.push('');
 		lines.push('Metadata');
 		lines.push(JSON.stringify(session.metadata || {}, null, 2));
@@ -230,10 +413,12 @@
 	}
 
 	function saveReport(session, reason) {
+		const cause = inferCause(session, reason);
 		const report = {
 			generatedAt: nowIso(),
 			reason: reason,
 			sessionId: session.id || '',
+			suspectedCause: cause,
 			text: buildReport(session, reason),
 		};
 		writeJson(REPORT_KEY, report);
@@ -398,8 +583,11 @@
 			}
 			console[level] = function () {
 				const args = Array.prototype.slice.call(arguments);
+				const raw = args.length ? args : [];
 				record('console.' + level, {
-					message: args.map(safeString).join(' '),
+					message: raw.map(safeString).join(' '),
+					raw: raw.map(safeString),
+					argCount: raw.length,
 				});
 				return original.apply(console, args);
 			};
