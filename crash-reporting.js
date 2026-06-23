@@ -8,9 +8,11 @@
 	const MAX_REPORT_CHARS = 500000;
 	const HEARTBEAT_INTERVAL_MS = 5000;
 	const REPORT_EMAIL = 'anthonycavuoti@gmail.com';
+	const REPORTER_VERSION = 3;
 
 	let persistTimer = 0;
 	let canvasAttached = false;
+	let eventSequence = 0;
 
 	function nowIso() {
 		return new Date().toISOString();
@@ -86,8 +88,10 @@
 	function collectMetadata() {
 		const nav = window.navigator || {};
 		const screenInfo = window.screen || {};
+		const currentScript = document.currentScript || null;
 		return {
-			reporterVersion: 1,
+			reporterVersion: REPORTER_VERSION,
+			scriptSrc: currentScript ? String(currentScript.src || '') : '',
 			userAgent: nav.userAgent || '',
 			platform: nav.platform || '',
 			language: nav.language || '',
@@ -96,6 +100,10 @@
 			maxTouchPoints: nav.maxTouchPoints || 0,
 			url: String(window.location.href || ''),
 			referrer: document.referrer || '',
+			visibilityState: document.visibilityState || '',
+			hidden: !!document.hidden,
+			wasDiscarded: !!document.wasDiscarded,
+			historyLength: window.history ? window.history.length : null,
 			viewport: {
 				width: window.innerWidth || 0,
 				height: window.innerHeight || 0,
@@ -107,6 +115,59 @@
 				orientation: screenInfo.orientation ? screenInfo.orientation.type : '',
 			},
 			timezoneOffsetMinutes: new Date().getTimezoneOffset(),
+		};
+	}
+
+	function collectRuntimeState() {
+		const nav = window.navigator || {};
+		const screenInfo = window.screen || {};
+		const perf = window.performance || {};
+		const memory = perf.memory || null;
+		const navigationEntries = typeof perf.getEntriesByType === 'function' ? perf.getEntriesByType('navigation') : [];
+		const navigation = navigationEntries && navigationEntries.length > 0 ? navigationEntries[0] : null;
+		const canvas = document.getElementById('canvas') || document.querySelector('canvas');
+		const canvasRect = canvas && typeof canvas.getBoundingClientRect === 'function' ? canvas.getBoundingClientRect() : null;
+		return {
+			reporterVersion: REPORTER_VERSION,
+			eventCount: session && Array.isArray(session.events) ? session.events.length : 0,
+			lastKnownGameState: session ? session.lastKnownGameState : '',
+			heartbeatAt: nowIso(),
+			uptimeMs: perf && typeof perf.now === 'function' ? Math.round(perf.now()) : null,
+			visibilityState: document.visibilityState || '',
+			hidden: !!document.hidden,
+			hasFocus: typeof document.hasFocus === 'function' ? document.hasFocus() : null,
+			online: typeof nav.onLine === 'boolean' ? nav.onLine : null,
+			wasDiscarded: !!document.wasDiscarded,
+			viewport: {
+				width: window.innerWidth || 0,
+				height: window.innerHeight || 0,
+				devicePixelRatio: window.devicePixelRatio || 1,
+			},
+			screen: {
+				width: screenInfo.width || 0,
+				height: screenInfo.height || 0,
+				orientation: screenInfo.orientation ? screenInfo.orientation.type : '',
+			},
+			canvas: canvas ? {
+				width: canvas.width || 0,
+				height: canvas.height || 0,
+				clientWidth: canvas.clientWidth || 0,
+				clientHeight: canvas.clientHeight || 0,
+				rectWidth: canvasRect ? Math.round(canvasRect.width) : 0,
+				rectHeight: canvasRect ? Math.round(canvasRect.height) : 0,
+			} : null,
+			memory: memory ? {
+				jsHeapSizeLimit: memory.jsHeapSizeLimit || 0,
+				totalJSHeapSize: memory.totalJSHeapSize || 0,
+				usedJSHeapSize: memory.usedJSHeapSize || 0,
+			} : null,
+			navigation: navigation ? {
+				type: navigation.type || '',
+				redirectCount: navigation.redirectCount || 0,
+				transferSize: navigation.transferSize || 0,
+				encodedBodySize: navigation.encodedBodySize || 0,
+				decodedBodySize: navigation.decodedBodySize || 0,
+			} : null,
 		};
 	}
 
@@ -152,6 +213,7 @@
 		lines.push('Last Known Game State: ' + String(session.lastKnownGameState || 'unknown'));
 		lines.push('Clean Exit: ' + String(!!session.cleanExit));
 		lines.push('Clean Exit Reason: ' + String(session.cleanExitReason || ''));
+		lines.push('Event Count: ' + String(events.length));
 		lines.push('');
 		lines.push('Metadata');
 		lines.push(JSON.stringify(session.metadata || {}, null, 2));
@@ -223,8 +285,9 @@
 	function record(type, data) {
 		const event = {
 			t: nowIso(),
+			seq: ++eventSequence,
 			type: String(type || 'event'),
-			data: compactValue(data || {}, 3),
+			data: compactValue(data || {}, 5),
 		};
 		session.events.push(event);
 		if (event.type === 'game.state_changed') {
@@ -311,11 +374,20 @@
 		return true;
 	}
 
-	function markPageExit(reason) {
+	function markPageExit(reason, event) {
+		record('browser.page_exit', {
+			reason: reason,
+			persisted: event && typeof event.persisted === 'boolean' ? event.persisted : null,
+			runtime: collectRuntimeState(),
+		});
 		session.active = false;
 		session.endedAt = nowIso();
 		session.endReason = reason;
 		persistNow();
+	}
+
+	function recordBrowserHeartbeat() {
+		record('browser.heartbeat', collectRuntimeState());
 	}
 
 	function installConsoleHooks() {
@@ -356,6 +428,7 @@
 			height: canvas.height || 0,
 			clientWidth: canvas.clientWidth || 0,
 			clientHeight: canvas.clientHeight || 0,
+			runtime: collectRuntimeState(),
 		});
 	}
 
@@ -370,7 +443,9 @@
 
 	installConsoleHooks();
 	record('browser.session_start', session.metadata);
+	record('browser.runtime_start', collectRuntimeState());
 	window.setInterval(persistNow, HEARTBEAT_INTERVAL_MS);
+	window.setInterval(recordBrowserHeartbeat, HEARTBEAT_INTERVAL_MS);
 	window.setInterval(attachCanvasListeners, 1000);
 	document.addEventListener('DOMContentLoaded', attachCanvasListeners);
 	window.addEventListener('error', function (event) {
@@ -391,12 +466,43 @@
 		record('browser.visibility_change', {
 			visibilityState: document.visibilityState,
 			hidden: document.hidden,
+			runtime: collectRuntimeState(),
 		});
 	});
-	window.addEventListener('pagehide', function () {
-		markPageExit('pagehide');
+	window.addEventListener('pageshow', function (event) {
+		record('browser.pageshow', {
+			persisted: !!event.persisted,
+			runtime: collectRuntimeState(),
+		});
 	});
-	window.addEventListener('beforeunload', function () {
-		markPageExit('beforeunload');
+	window.addEventListener('pagehide', function (event) {
+		markPageExit('pagehide', event);
+	});
+	window.addEventListener('beforeunload', function (event) {
+		markPageExit('beforeunload', event);
+	});
+	window.addEventListener('focus', function () {
+		record('browser.focus', collectRuntimeState());
+	});
+	window.addEventListener('blur', function () {
+		record('browser.blur', collectRuntimeState());
+	});
+	window.addEventListener('resize', function () {
+		record('browser.resize', collectRuntimeState());
+	});
+	window.addEventListener('orientationchange', function () {
+		record('browser.orientation_change', collectRuntimeState());
+	});
+	window.addEventListener('online', function () {
+		record('browser.online', collectRuntimeState());
+	});
+	window.addEventListener('offline', function () {
+		record('browser.offline', collectRuntimeState());
+	});
+	document.addEventListener('freeze', function () {
+		record('browser.freeze', collectRuntimeState());
+	});
+	document.addEventListener('resume', function () {
+		record('browser.resume', collectRuntimeState());
 	});
 }());
